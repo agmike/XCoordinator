@@ -22,7 +22,7 @@ open class RedirectionCoordinator<RouteType: Route, TransitionType: TransitionPr
 
     // MARK: - Stored properties
 
-    private let superTransitionPerformer: AnyTransitionPerformer<TransitionType>
+    private let rootViewControllerBox = ReferenceBox<RootViewController>()
     private let viewControllerBox = ReferenceBox<UIViewController>()
     private let _prepareTransition: ((RouteType) -> TransitionType)?
 
@@ -30,7 +30,7 @@ open class RedirectionCoordinator<RouteType: Route, TransitionType: TransitionPr
 
     /// The viewController used in transitions, e.g. when presenting, pushing or otherwise displaying a RedirectionCoordinator.
     public var rootViewController: TransitionType.RootViewController {
-        return superTransitionPerformer.rootViewController
+        return rootViewControllerBox.get()! // swiftlint:disable:this force_unwrapping
     }
 
     open var viewController: UIViewController! {
@@ -53,34 +53,11 @@ open class RedirectionCoordinator<RouteType: Route, TransitionType: TransitionPr
     ///         If you override `prepareTransition(for:)`, this closure will be ignored.
     ///
     public init(viewController: UIViewController,
-                superTransitionPerformer: AnyTransitionPerformer<TransitionType>,
+                rootViewController: RootViewController,
                 prepareTransition: ((RouteType) -> TransitionType)?) {
 
         viewControllerBox.set(viewController)
-        self.superTransitionPerformer = superTransitionPerformer
-        _prepareTransition = prepareTransition
-    }
-
-    ///
-    /// Creates a RedirectionCoordinator with a viewController, a superTransitionPerfomer and an optional `prepareTransition` closure.
-    ///
-    /// - Parameters:
-    ///     - viewController:
-    ///         The viewController used in transitions, e.g. when presenting, pushing or otherwise displaying a RedirectionCoordinator.
-    ///     - superTransitionPerformer:
-    ///         The superCoordinator all transitions are redirected to.
-    ///     - prepareTransition:
-    ///         A closure preparing transitions for triggered routes.
-    ///         If you specify `nil` here, make sure to override `prepareTransiton(for:)`.
-    ///         If you override `prepareTransition(for:)`, this closure will be ignored.
-    ///
-    public init<T: TransitionPerformer>(viewController: UIViewController,
-                                        superTransitionPerformer: T,
-                                        prepareTransition: ((RouteType) -> TransitionType)?
-        ) where T.TransitionType == TransitionType {
-
-        viewControllerBox.set(viewController)
-        self.superTransitionPerformer = AnyTransitionPerformer(superTransitionPerformer)
+        rootViewControllerBox.set(rootViewController)
         _prepareTransition = prepareTransition
     }
 
@@ -88,7 +65,9 @@ open class RedirectionCoordinator<RouteType: Route, TransitionType: TransitionPr
 
     open func presented(from presentable: Presentable?) {
         viewController?.presented(from: presentable)
+        rootViewController.presented(from: presentable)
         viewControllerBox.releaseStrongReference()
+        rootViewControllerBox.releaseStrongReference()
     }
 
     open func prepareTransition(for route: RouteType) -> TransitionType {
@@ -101,7 +80,7 @@ open class RedirectionCoordinator<RouteType: Route, TransitionType: TransitionPr
     public func performTransition(_ transition: TransitionType,
                                   with options: TransitionOptions,
                                   completion: PresentationHandler?) {
-        superTransitionPerformer.performTransition(transition, with: options, completion: completion)
+        transition.perform(on: rootViewController, with: options, completion: completion)
     }
 }
 
@@ -127,7 +106,7 @@ extension RedirectionCoordinator {
                                             superCoordinator: C,
                                             prepareTransition: ((RouteType) -> TransitionType)?) where C.TransitionType == TransitionType {
         self.init(viewController: viewController,
-                  superTransitionPerformer: AnyTransitionPerformer(superCoordinator),
+                  rootViewController: superCoordinator.rootViewController,
                   prepareTransition: prepareTransition)
     }
 }
